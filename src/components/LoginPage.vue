@@ -22,11 +22,6 @@ function confirmNickname() {
 
       <h1>MapPin</h1>
 
-      <p class="subtitle">
-        Flyer distribution tracking map<br />
-        Enter your nickname to continue
-      </p>
-
       <input
         v-model="nicknameInput"
         class="login-input"
