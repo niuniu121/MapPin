@@ -1,0 +1,1609 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MapPin — 协作标记地图</title>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          "Segoe UI", sans-serif;
+        background: #f0f4ff;
+        color: #1f2937;
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #d1d5db;
+        border-radius: 3px;
+      }
+
+      /* ── Config Banner ── */
+      .config-banner {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .config-inner {
+        background: white;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 560px;
+        width: 100%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      }
+      .config-inner h2 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 12px;
+      }
+      .config-inner p {
+        font-size: 13px;
+        color: #6b7280;
+        line-height: 1.6;
+        margin-bottom: 8px;
+      }
+      .config-inner ol {
+        padding-left: 20px;
+        font-size: 13px;
+        color: #374151;
+        line-height: 2;
+      }
+      .config-inner code {
+        background: #f3f4f6;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .config-inner a {
+        color: #4f46e5;
+        font-weight: 600;
+      }
+      .config-divider {
+        border: none;
+        border-top: 1px solid #e5e7eb;
+        margin: 16px 0;
+      }
+
+      /* ── Login Page ── */
+      .login-page {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(
+          135deg,
+          #eef2ff 0%,
+          #e0e7ff 50%,
+          #c7d2fe 100%
+        );
+      }
+      .login-card {
+        background: white;
+        border-radius: 20px;
+        padding: 48px 40px;
+        box-shadow: 0 20px 60px rgba(79, 70, 229, 0.15);
+        width: 100%;
+        max-width: 400px;
+        text-align: center;
+      }
+      .login-logo {
+        width: 68px;
+        height: 68px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 20px;
+        font-size: 32px;
+      }
+      .login-card h1 {
+        font-size: 26px;
+        font-weight: 800;
+        color: #111827;
+        margin-bottom: 6px;
+      }
+      .login-card .subtitle {
+        color: #6b7280;
+        margin-bottom: 32px;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .login-input {
+        width: 100%;
+        padding: 13px 16px;
+        border: 2px solid #e5e7eb;
+        border-radius: 10px;
+        font-size: 15px;
+        outline: none;
+        transition: border-color 0.2s;
+        margin-bottom: 12px;
+      }
+      .login-input:focus {
+        border-color: #4f46e5;
+      }
+
+      /* ── Shared Buttons ── */
+      .btn-primary {
+        width: 100%;
+        padding: 13px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+        transition:
+          opacity 0.2s,
+          transform 0.1s;
+      }
+      .btn-primary:hover {
+        opacity: 0.9;
+      }
+      .btn-primary:active {
+        transform: scale(0.98);
+      }
+      .btn-primary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .btn-ghost {
+        padding: 8px 14px;
+        background: none;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #6b7280;
+        transition: all 0.15s;
+      }
+      .btn-ghost:hover {
+        background: #f3f4f6;
+        border-color: #d1d5db;
+      }
+
+      /* ── Top Bar (Campaigns) ── */
+      .top-bar {
+        background: white;
+        padding: 14px 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .brand-icon {
+        width: 36px;
+        height: 36px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 18px;
+      }
+      .brand h1 {
+        font-size: 18px;
+        font-weight: 800;
+        color: #111827;
+      }
+      .user-area {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 700;
+        font-size: 14px;
+        flex-shrink: 0;
+      }
+      .user-name {
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      /* ── Campaigns Grid ── */
+      .campaigns-page {
+        min-height: 100vh;
+      }
+      .campaigns-content {
+        padding: 28px 24px;
+        max-width: 1100px;
+        margin: 0 auto;
+      }
+      .campaigns-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 24px;
+      }
+      .campaigns-header h2 {
+        font-size: 20px;
+        font-weight: 700;
+      }
+      .campaigns-header p {
+        font-size: 13px;
+        color: #6b7280;
+        margin-top: 3px;
+      }
+      .btn-create {
+        padding: 10px 18px;
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        transition: opacity 0.2s;
+      }
+      .btn-create:hover {
+        opacity: 0.9;
+      }
+      .campaigns-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+        gap: 16px;
+      }
+      .campaign-card {
+        background: white;
+        border-radius: 14px;
+        padding: 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid transparent;
+        position: relative;
+      }
+      .campaign-card:hover {
+        border-color: #4f46e5;
+        box-shadow: 0 6px 20px rgba(79, 70, 229, 0.15);
+        transform: translateY(-2px);
+      }
+      .card-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      .card-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 11px;
+        background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+      }
+      .btn-del {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 6px 8px;
+        border-radius: 6px;
+        color: #d1d5db;
+        font-size: 15px;
+        transition: all 0.15s;
+      }
+      .btn-del:hover {
+        background: #fee2e2;
+        color: #ef4444;
+      }
+      .campaign-card h3 {
+        font-size: 15px;
+        font-weight: 700;
+        margin-bottom: 5px;
+        color: #111827;
+      }
+      .campaign-card .desc {
+        font-size: 13px;
+        color: #6b7280;
+        margin-bottom: 14px;
+        line-height: 1.4;
+        min-height: 18px;
+      }
+      .card-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        color: #9ca3af;
+        flex-wrap: wrap;
+      }
+      .meta-item {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+      }
+      .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #9ca3af;
+        grid-column: 1 / -1;
+      }
+      .empty-state .big-icon {
+        font-size: 52px;
+        margin-bottom: 14px;
+      }
+      .empty-state p {
+        font-size: 14px;
+      }
+
+      /* ── Modal ── */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 500;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .modal-card {
+        background: white;
+        border-radius: 18px;
+        padding: 28px;
+        width: 100%;
+        max-width: 480px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .modal-card h3 {
+        font-size: 18px;
+        font-weight: 700;
+        margin-bottom: 20px;
+      }
+      .form-group {
+        margin-bottom: 14px;
+      }
+      .form-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: #374151;
+        margin-bottom: 5px;
+      }
+      .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+        outline: none;
+        transition: border-color 0.2s;
+        background: white;
+      }
+      .form-input:focus {
+        border-color: #4f46e5;
+      }
+      .form-select {
+        appearance: none;
+        cursor: pointer;
+      }
+      .custom-coords {
+        display: grid;
+        grid-template-columns: 1fr 1fr 80px;
+        gap: 8px;
+      }
+      .modal-footer {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .btn-cancel {
+        flex: 1;
+        padding: 11px;
+        background: #f3f4f6;
+        color: #374151;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .btn-cancel:hover {
+        background: #e5e7eb;
+      }
+      .btn-confirm {
+        flex: 2;
+        padding: 11px;
+      }
+
+      /* ── Map Page ── */
+      .map-page {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .map-topbar {
+        background: white;
+        padding: 11px 16px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+        z-index: 100;
+        flex-shrink: 0;
+      }
+      .btn-back {
+        padding: 7px 11px;
+        background: #f3f4f6;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 18px;
+        line-height: 1;
+        transition: background 0.15s;
+        flex-shrink: 0;
+      }
+      .btn-back:hover {
+        background: #e5e7eb;
+      }
+      .map-title {
+        font-size: 15px;
+        font-weight: 700;
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .map-hint {
+        font-size: 12px;
+        color: #9ca3af;
+        white-space: nowrap;
+      }
+      .badge {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .badge-purple {
+        background: #ede9fe;
+        color: #5b21b6;
+      }
+      .btn-sidebar {
+        padding: 7px 12px;
+        background: #f3f4f6;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        color: #374151;
+        transition: background 0.15s;
+        white-space: nowrap;
+      }
+      .btn-sidebar:hover {
+        background: #e5e7eb;
+      }
+
+      .map-body {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        position: relative;
+      }
+      #leaflet-map {
+        flex: 1;
+      }
+
+      /* ── Sidebar ── */
+      .map-sidebar {
+        width: 290px;
+        background: white;
+        display: flex;
+        flex-direction: column;
+        box-shadow: -2px 0 10px rgba(0, 0, 0, 0.07);
+        z-index: 50;
+        flex-shrink: 0;
+        transition: width 0.3s ease;
+        overflow: hidden;
+      }
+      .map-sidebar.collapsed {
+        width: 0;
+      }
+      .sidebar-section {
+        padding: 14px 16px;
+        border-bottom: 1px solid #f3f4f6;
+        flex-shrink: 0;
+      }
+      .sidebar-section h3 {
+        font-size: 13px;
+        font-weight: 700;
+        color: #111827;
+        margin-bottom: 10px;
+      }
+      .member-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+      }
+      .member-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+      }
+      .member-name {
+        font-size: 13px;
+        flex: 1;
+      }
+      .member-count {
+        padding: 2px 8px;
+        background: #ede9fe;
+        color: #5b21b6;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 600;
+      }
+
+      .filter-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .filter-chip {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        cursor: pointer;
+        border: 1.5px solid #e5e7eb;
+        background: white;
+        color: #374151;
+        transition: all 0.15s;
+        font-weight: 500;
+      }
+      .filter-chip:hover {
+        border-color: #a5b4fc;
+      }
+
+      .marker-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 6px 8px;
+      }
+      .marker-item {
+        padding: 9px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.15s;
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+      }
+      .marker-item:hover {
+        background: #f9fafb;
+      }
+      .marker-color-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 3px;
+      }
+      .marker-info {
+        flex: 1;
+        min-width: 0;
+      }
+      .marker-top {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 2px;
+      }
+      .marker-nick {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .status-badge {
+        font-size: 10px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 600;
+      }
+      .s-done {
+        background: #d1fae5;
+        color: #065f46;
+      }
+      .s-progress {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .s-skip {
+        background: #fee2e2;
+        color: #991b1b;
+      }
+      .marker-note {
+        font-size: 12px;
+        color: #6b7280;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .marker-time {
+        font-size: 11px;
+        color: #9ca3af;
+        margin-top: 2px;
+      }
+      .marker-del {
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #d1d5db;
+        font-size: 13px;
+        padding: 2px 4px;
+        border-radius: 4px;
+        transition: all 0.15s;
+        flex-shrink: 0;
+      }
+      .marker-del:hover {
+        color: #ef4444;
+        background: #fee2e2;
+      }
+      .no-markers {
+        text-align: center;
+        padding: 24px 16px;
+        color: #9ca3af;
+        font-size: 13px;
+      }
+
+      /* ── Note Bottom Sheet ── */
+      .sheet-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 600;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .sheet {
+        background: white;
+        border-radius: 20px 20px 0 0;
+        padding: 24px 20px 32px;
+        width: 100%;
+        max-width: 520px;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+      }
+      .sheet-handle {
+        width: 36px;
+        height: 4px;
+        background: #e5e7eb;
+        border-radius: 2px;
+        margin: 0 auto 16px;
+      }
+      .sheet h3 {
+        font-size: 16px;
+        font-weight: 700;
+        margin-bottom: 16px;
+      }
+      .status-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+      .status-opt {
+        flex: 1;
+        padding: 9px 6px;
+        border: 1.5px solid #e5e7eb;
+        border-radius: 9px;
+        text-align: center;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+        transition: all 0.15s;
+      }
+      .status-opt:hover {
+        border-color: #a5b4fc;
+      }
+      .opt-done.active {
+        border-color: #10b981;
+        background: #ecfdf5;
+        color: #065f46;
+      }
+      .opt-prog.active {
+        border-color: #f59e0b;
+        background: #fffbeb;
+        color: #92400e;
+      }
+      .opt-skip.active {
+        border-color: #ef4444;
+        background: #fef2f2;
+        color: #991b1b;
+      }
+
+      @media (max-width: 640px) {
+        .map-sidebar {
+          position: absolute;
+          right: 0;
+          top: 0;
+          bottom: 0;
+          height: 100%;
+          z-index: 200;
+        }
+        .map-hint {
+          display: none;
+        }
+        .campaigns-content {
+          padding: 20px 14px;
+        }
+        .login-card {
+          padding: 36px 24px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <!-- ══ Firebase 未配置提示 ══ -->
+      <div v-if="!firebaseConfigured" class="config-banner">
+        <div class="config-inner">
+          <h2>🔥 需要配置 Firebase</h2>
+          <p>
+            本应用使用 Firebase Firestore 实现实时多人协作。请按以下步骤配置：
+          </p>
+          <hr class="config-divider" />
+          <ol>
+            <li>
+              前往
+              <a href="https://console.firebase.google.com" target="_blank"
+                >Firebase Console</a
+              >
+              创建项目
+            </li>
+            <li>
+              进入项目 → <strong>Firestore Database</strong> →
+              新建数据库（测试模式即可）
+            </li>
+            <li>
+              进入<strong>项目设置</strong> → <strong>你的应用</strong> → 复制
+              SDK 配置
+            </li>
+            <li>
+              用文本编辑器打开本 HTML 文件，找到
+              <code>FIREBASE_CONFIG</code>，填入配置
+            </li>
+            <li>保存后重新打开即可使用</li>
+          </ol>
+          <hr class="config-divider" />
+          <p style="font-size: 12px; color: #9ca3af">
+            配置仅需一次，所有成员共用同一个 Firebase 项目
+          </p>
+        </div>
+      </div>
+
+      <!-- ══ 登录页 ══ -->
+      <div v-show="view === 'login'" class="login-page">
+        <div class="login-card">
+          <div class="login-logo">📍</div>
+          <h1>MapPin</h1>
+          <input
+            v-model="nicknameInput"
+            class="login-input"
+            placeholder="输入你的昵称"
+            maxlength="20"
+            autofocus
+            @keyup.enter="confirmNickname"
+          />
+          <button
+            class="btn-primary"
+            :disabled="!nicknameInput.trim()"
+            @click="confirmNickname"
+          >
+            进入 →
+          </button>
+        </div>
+      </div>
+
+      <!-- ══ 地图项目列表 ══ -->
+      <div v-show="view === 'campaigns'" class="campaigns-page">
+        <div class="top-bar">
+          <div class="brand">
+            <div class="brand-icon">📍</div>
+            <h1>MapPin</h1>
+          </div>
+          <div class="user-area">
+            <div class="avatar" :style="{ background: getColor(nickname) }">
+              {{ nickname ? nickname[0].toUpperCase() : '?' }}
+            </div>
+            <span class="user-name">{{ nickname }}</span>
+            <button class="btn-ghost" @click="logout">退出</button>
+          </div>
+        </div>
+
+        <div class="campaigns-content">
+          <div class="campaigns-header">
+            <div>
+              <h2>地图项目</h2>
+              <p>点击项目进入地图，与团队实时协作标记</p>
+            </div>
+            <button class="btn-create" @click="showNewCampaign = true">
+              ＋ 新建地图
+            </button>
+          </div>
+
+          <div class="campaigns-grid">
+            <div v-if="campaigns.length === 0" class="empty-state">
+              <div class="big-icon">🗺️</div>
+              <p>还没有地图项目，点击「新建地图」开始</p>
+            </div>
+            <div
+              v-for="c in campaigns"
+              :key="c.id"
+              class="campaign-card"
+              @click="enterCampaign(c)"
+            >
+              <div class="card-header">
+                <div class="card-icon">{{ cityEmoji(c.city) }}</div>
+                <button
+                  class="btn-del"
+                  title="删除项目"
+                  @click.stop="deleteCampaign(c)"
+                >
+                  ✕
+                </button>
+              </div>
+              <h3>{{ c.name }}</h3>
+              <p class="desc">{{ c.description || '暂无描述' }}</p>
+              <div class="card-meta">
+                <span class="meta-item">📍 {{ cityName(c.city) }}</span>
+                <span class="meta-item">👤 {{ c.createdBy }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 新建地图弹窗 -->
+        <div
+          v-if="showNewCampaign"
+          class="modal-overlay"
+          @click.self="showNewCampaign = false"
+        >
+          <div class="modal-card">
+            <h3>🗺️ 新建地图项目</h3>
+            <div class="form-group">
+              <label>项目名称 *</label>
+              <input
+                v-model="nc.name"
+                class="form-input"
+                placeholder=""
+                maxlength="60"
+              />
+            </div>
+            <div class="form-group">
+              <label>备注说明</label>
+              <input
+                v-model="nc.description"
+                class="form-input"
+                placeholder=""
+              />
+            </div>
+            <div class="form-group">
+              <label>城市</label>
+              <select v-model="nc.city" class="form-input form-select">
+                <option v-for="p in cityPresets" :key="p.id" :value="p.id">
+                  {{ p.flag }} {{ p.name }}
+                </option>
+              </select>
+            </div>
+            <div v-if="nc.city === 'custom'" class="custom-coords">
+              <div class="form-group">
+                <label>纬度</label>
+                <input
+                  v-model="nc.lat"
+                  class="form-input"
+                  placeholder="-37.81"
+                />
+              </div>
+              <div class="form-group">
+                <label>经度</label>
+                <input
+                  v-model="nc.lng"
+                  class="form-input"
+                  placeholder="144.96"
+                />
+              </div>
+              <div class="form-group">
+                <label>缩放</label>
+                <input
+                  v-model="nc.zoom"
+                  class="form-input"
+                  type="number"
+                  min="5"
+                  max="18"
+                  placeholder="13"
+                />
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="showNewCampaign = false">
+                取消
+              </button>
+              <button
+                class="btn-primary btn-confirm"
+                :disabled="!nc.name.trim()"
+                @click="createCampaign"
+              >
+                创建
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ 地图页 ══ -->
+      <div v-show="view === 'map'" class="map-page">
+        <div class="map-topbar">
+          <button class="btn-back" @click="backToCampaigns">←</button>
+          <span class="map-title"
+            >{{ currentCampaign ? currentCampaign.name : '' }}</span
+          >
+          <span class="map-hint">👆 点击地图添加标记</span>
+          <span class="badge badge-purple">{{ markers.length }} 个标记</span>
+          <button class="btn-sidebar" @click="sidebarOpen = !sidebarOpen">
+            {{ sidebarOpen ? '◀ 隐藏' : '▶ 成员' }}
+          </button>
+        </div>
+
+        <div class="map-body">
+          <div id="leaflet-map"></div>
+
+          <!-- 侧边栏 -->
+          <div class="map-sidebar" :class="{ collapsed: !sidebarOpen }">
+            <!-- 成员统计 -->
+            <div class="sidebar-section">
+              <h3>成员统计</h3>
+              <div
+                v-if="memberStats.length === 0"
+                style="font-size: 13px; color: #9ca3af"
+              >
+                暂无标记
+              </div>
+              <div
+                v-for="[nick, cnt] in memberStats"
+                :key="nick"
+                class="member-row"
+              >
+                <div
+                  class="member-dot"
+                  :style="{ background: getColor(nick) }"
+                ></div>
+                <span class="member-name">{{ nick }}</span>
+                <span class="member-count">{{ cnt }}</span>
+              </div>
+            </div>
+
+            <!-- 筛选 -->
+            <div class="sidebar-section">
+              <div
+                style="
+                  font-size: 12px;
+                  color: #6b7280;
+                  margin-bottom: 7px;
+                  font-weight: 600;
+                "
+              >
+                按成员筛选
+              </div>
+              <div class="filter-chips">
+                <div
+                  class="filter-chip"
+                  :style="!filterBy ? { background:'#4F46E5', borderColor:'#4F46E5', color:'#fff' } : {}"
+                  @click="filterBy = ''"
+                >
+                  全部
+                </div>
+                <div
+                  v-for="nick in uniqueMembers"
+                  :key="nick"
+                  class="filter-chip"
+                  :style="filterBy === nick ? { background: getColor(nick), borderColor: getColor(nick), color:'#fff' } : {}"
+                  @click="filterBy = (filterBy === nick ? '' : nick)"
+                >
+                  {{ nick }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 标记列表 -->
+            <div class="marker-list">
+              <div v-if="filteredMarkers.length === 0" class="no-markers">
+                暂无标记点
+              </div>
+              <div
+                v-for="m in filteredMarkers"
+                :key="m.id"
+                class="marker-item"
+                @click="flyTo(m)"
+              >
+                <div
+                  class="marker-color-dot"
+                  :style="{ background: m.color || getColor(m.nickname) }"
+                ></div>
+                <div class="marker-info">
+                  <div class="marker-top">
+                    <span class="marker-nick">{{ m.nickname }}</span>
+                    <span class="status-badge" :class="sCls(m.status)"
+                      >{{ sLbl(m.status) }}</span
+                    >
+                  </div>
+                  <div class="marker-note">{{ m.note || '（无备注）' }}</div>
+                  <div class="marker-time">{{ fmtTime(m.createdAt) }}</div>
+                </div>
+                <button
+                  v-if="m.nickname === nickname"
+                  class="marker-del"
+                  title="删除"
+                  @click.stop="deleteMarker(m.id)"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 添加标记底部弹出 -->
+        <div v-if="showSheet" class="sheet-overlay" @click.self="cancelSheet">
+          <div class="sheet">
+            <div class="sheet-handle"></div>
+            <h3>📍 添加标记点</h3>
+            <div class="form-group">
+              <label>状态</label>
+              <div class="status-row">
+                <div
+                  class="status-opt opt-done"
+                  :class="{ active: sheetStatus === 'done' }"
+                  @click="sheetStatus = 'done'"
+                >
+                  ✅ 已完成
+                </div>
+                <div
+                  class="status-opt opt-prog"
+                  :class="{ active: sheetStatus === 'progress' }"
+                  @click="sheetStatus = 'progress'"
+                >
+                  🔄 进行中
+                </div>
+                <div
+                  class="status-opt opt-skip"
+                  :class="{ active: sheetStatus === 'skip' }"
+                  @click="sheetStatus = 'skip'"
+                >
+                  ⏭️ 跳过
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>备注（可选）</label>
+              <input
+                v-model="sheetNote"
+                class="form-input"
+                placeholder="例：CBD主街道已全部发完"
+                @keyup.enter="confirmMarker"
+              />
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="cancelSheet">取消</button>
+              <button class="btn-primary btn-confirm" @click="confirmMarker">
+                确认添加
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <!-- #app -->
+
+    <script>
+      // ══════════════════════════════════════════════════════════
+      //  🔥 FIREBASE 配置 — 替换为你自己的项目配置
+      //  获取方式: Firebase Console → 项目设置 → 你的应用
+      // ══════════════════════════════════════════════════════════
+      const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyBG-SFgQUcbJwaKP1upYhw1GkXiaJSBtIY",
+        authDomain: "mappin-e444e.firebaseapp.com",
+        projectId: "mappin-e444e",
+        storageBucket: "mappin-e444e.firebasestorage.app",
+        messagingSenderId: "92166374745",
+        appId: "1:92166374745:web:f43ae585b3e8df2b0cb848",
+      };
+
+      // ══════════════════════════════════════════════════════════
+      //  城市预设（可自由扩展）
+      // ══════════════════════════════════════════════════════════
+      const CITIES = [
+        {
+          id: "melbourne",
+          name: "墨尔本",
+          flag: "🦘",
+          lat: -37.8136,
+          lng: 144.9631,
+          zoom: 13,
+        },
+        {
+          id: "sydney",
+          name: "悉尼",
+          flag: "🌉",
+          lat: -33.8688,
+          lng: 151.2093,
+          zoom: 13,
+        },
+        {
+          id: "brisbane",
+          name: "布里斯班",
+          flag: "🌞",
+          lat: -27.4698,
+          lng: 153.0251,
+          zoom: 13,
+        },
+        {
+          id: "perth",
+          name: "珀斯",
+          flag: "🌊",
+          lat: -31.9505,
+          lng: 115.8605,
+          zoom: 13,
+        },
+        {
+          id: "adelaide",
+          name: "阿德莱德",
+          flag: "🍷",
+          lat: -34.9285,
+          lng: 138.6007,
+          zoom: 13,
+        },
+        {
+          id: "custom",
+          name: "自定义位置",
+          flag: "📌",
+          lat: -25.2744,
+          lng: 133.7751,
+          zoom: 5,
+        },
+      ];
+
+      // ══════════════════════════════════════════════════════════
+      //  工具函数
+      // ══════════════════════════════════════════════════════════
+      const PALETTE = [
+        "#EF4444",
+        "#F59E0B",
+        "#10B981",
+        "#3B82F6",
+        "#8B5CF6",
+        "#EC4899",
+        "#14B8A6",
+        "#F97316",
+        "#6366F1",
+        "#84CC16",
+      ];
+
+      function getColor(str) {
+        if (!str) return PALETTE[0];
+        let h = 0;
+        for (const c of str) h = c.charCodeAt(0) + ((h << 5) - h);
+        return PALETTE[Math.abs(h) % PALETTE.length];
+      }
+
+      function makeIcon(color, status) {
+        const symbols = { done: "✓", progress: "…", skip: "×" };
+        const sym = symbols[status] || "✓";
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 46" width="32" height="46">
+    <defs><filter id="ds"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-opacity="0.25"/></filter></defs>
+    <path d="M16 0C7.16 0 0 7.16 0 16c0 12.44 16 30 16 30s16-17.56 16-30C32 7.16 24.84 0 16 0z"
+          fill="${color}" filter="url(#ds)"/>
+    <circle cx="16" cy="16" r="9" fill="rgba(255,255,255,0.95)"/>
+    <text x="16" y="20.5" text-anchor="middle" font-size="10" font-weight="bold" fill="${color}">${sym}</text>
+  </svg>`;
+        return L.divIcon({
+          html: svg,
+          className: "",
+          iconSize: [32, 46],
+          iconAnchor: [16, 46],
+          popupAnchor: [0, -48],
+        });
+      }
+
+      // ══════════════════════════════════════════════════════════
+      //  Firebase init
+      // ══════════════════════════════════════════════════════════
+      let db = null;
+      let firebaseConfigured = false;
+      try {
+        if (FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY") {
+          firebase.initializeApp(FIREBASE_CONFIG);
+          db = firebase.firestore();
+          firebaseConfigured = true;
+        }
+      } catch (e) {
+        console.error("Firebase init error:", e);
+      }
+
+      // ══════════════════════════════════════════════════════════
+      //  Vue App
+      // ══════════════════════════════════════════════════════════
+      const { createApp } = Vue;
+
+      createApp({
+        data() {
+          return {
+            firebaseConfigured,
+            // login
+            view: localStorage.getItem("mp_nick") ? "campaigns" : "login",
+            nickname: localStorage.getItem("mp_nick") || "",
+            nicknameInput: "",
+            // campaigns
+            campaigns: [],
+            showNewCampaign: false,
+            nc: {
+              name: "",
+              description: "",
+              city: "melbourne",
+              lat: "",
+              lng: "",
+              zoom: 13,
+            },
+            cityPresets: CITIES,
+            _unsubCampaigns: null,
+            // map
+            currentCampaign: null,
+            markers: [],
+            map: null,
+            lMarkers: {}, // id → Leaflet marker
+            _unsubMarkers: null,
+            filterBy: "",
+            sidebarOpen: true,
+            // sheet
+            showSheet: false,
+            pendingLatLng: null,
+            sheetNote: "",
+            sheetStatus: "done",
+          };
+        },
+
+        computed: {
+          filteredMarkers() {
+            return this.filterBy
+              ? this.markers.filter((m) => m.nickname === this.filterBy)
+              : this.markers;
+          },
+          uniqueMembers() {
+            return [...new Set(this.markers.map((m) => m.nickname))];
+          },
+          memberStats() {
+            const s = {};
+            for (const m of this.markers)
+              s[m.nickname] = (s[m.nickname] || 0) + 1;
+            return Object.entries(s).sort((a, b) => b[1] - a[1]);
+          },
+        },
+
+        methods: {
+          // ── Login ──
+          confirmNickname() {
+            const n = this.nicknameInput.trim();
+            if (!n) return;
+            this.nickname = n;
+            localStorage.setItem("mp_nick", n);
+            this.view = "campaigns";
+            this.loadCampaigns();
+          },
+          logout() {
+            this._cleanup();
+            localStorage.removeItem("mp_nick");
+            this.nickname = "";
+            this.nicknameInput = "";
+            this.campaigns = [];
+            this.view = "login";
+          },
+
+          // ── Campaigns ──
+          loadCampaigns() {
+            if (!db) return;
+            if (this._unsubCampaigns) this._unsubCampaigns();
+            this._unsubCampaigns = db
+              .collection("campaigns")
+              .orderBy("createdAt", "desc")
+              .onSnapshot(
+                (snap) => {
+                  this.campaigns = snap.docs.map((d) => ({
+                    id: d.id,
+                    ...d.data(),
+                  }));
+                },
+                (err) => console.error(err),
+              );
+          },
+          async createCampaign() {
+            const n = this.nc;
+            if (!n.name.trim() || !db) return;
+            const preset = CITIES.find((p) => p.id === n.city);
+            const lat =
+              n.city === "custom"
+                ? parseFloat(n.lat) || preset.lat
+                : preset.lat;
+            const lng =
+              n.city === "custom"
+                ? parseFloat(n.lng) || preset.lng
+                : preset.lng;
+            const zoom =
+              n.city === "custom" ? parseInt(n.zoom) || 13 : preset.zoom;
+            await db.collection("campaigns").add({
+              name: n.name.trim(),
+              description: n.description.trim(),
+              city: n.city,
+              centerLat: lat,
+              centerLng: lng,
+              zoom,
+              createdBy: this.nickname,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+            this.showNewCampaign = false;
+            this.nc = {
+              name: "",
+              description: "",
+              city: "melbourne",
+              lat: "",
+              lng: "",
+              zoom: 13,
+            };
+          },
+          async deleteCampaign(c) {
+            if (
+              !confirm(
+                `删除「${c.name}」？所有标记也会一并删除，此操作不可撤销。`,
+              )
+            )
+              return;
+            const snap = await db
+              .collection("campaigns")
+              .doc(c.id)
+              .collection("markers")
+              .get();
+            const batch = db.batch();
+            snap.docs.forEach((d) => batch.delete(d.ref));
+            batch.delete(db.collection("campaigns").doc(c.id));
+            await batch.commit();
+          },
+
+          // ── Map ──
+          async enterCampaign(c) {
+            this.currentCampaign = c;
+            this.markers = [];
+            this.lMarkers = {};
+            this.filterBy = "";
+            this.view = "map";
+            await this.$nextTick();
+            this._initMap(c);
+            this._subscribeMarkers(c.id);
+          },
+          _initMap(c) {
+            if (this.map) {
+              this.map.remove();
+              this.map = null;
+            }
+            this.map = L.map("leaflet-map", { zoomControl: true }).setView(
+              [c.centerLat, c.centerLng],
+              c.zoom,
+            );
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+              attribution:
+                '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+              maxZoom: 19,
+            }).addTo(this.map);
+            this.map.on("click", (e) => {
+              this.pendingLatLng = e.latlng;
+              this.sheetNote = "";
+              this.sheetStatus = "done";
+              this.showSheet = true;
+            });
+          },
+          _subscribeMarkers(campaignId) {
+            if (this._unsubMarkers) this._unsubMarkers();
+            this._unsubMarkers = db
+              .collection("campaigns")
+              .doc(campaignId)
+              .collection("markers")
+              .orderBy("createdAt", "desc")
+              .onSnapshot(
+                (snap) => {
+                  // Remove deleted
+                  const ids = new Set(snap.docs.map((d) => d.id));
+                  for (const id of Object.keys(this.lMarkers)) {
+                    if (!ids.has(id)) {
+                      if (this.map) this.map.removeLayer(this.lMarkers[id]);
+                      delete this.lMarkers[id];
+                    }
+                  }
+                  this.markers = snap.docs.map((d) => ({
+                    id: d.id,
+                    ...d.data(),
+                  }));
+                  // Add new
+                  for (const m of this.markers) {
+                    if (!this.lMarkers[m.id] && this.map) {
+                      const color = m.color || getColor(m.nickname);
+                      const icon = makeIcon(color, m.status);
+                      const lm = L.marker([m.lat, m.lng], { icon })
+                        .addTo(this.map)
+                        .bindPopup(this._buildPopup(m, color));
+                      this.lMarkers[m.id] = lm;
+                    }
+                  }
+                },
+                (err) => console.error(err),
+              );
+          },
+          _buildPopup(m, color) {
+            const t = m.createdAt
+              ? new Date(m.createdAt.seconds * 1000).toLocaleString("zh-CN")
+              : "";
+            const labels = {
+              done: "✅ 已完成",
+              progress: "🔄 进行中",
+              skip: "⏭️ 跳过",
+            };
+            const canDel = m.nickname === this.nickname;
+            return `<div style="min-width:175px;font-family:-apple-system,sans-serif;line-height:1.5">
+        <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px">
+          <div style="width:13px;height:13px;border-radius:50%;background:${color};flex-shrink:0"></div>
+          <strong style="font-size:14px">${m.nickname}</strong>
+          <span style="font-size:11px;background:#F3F4F6;padding:1px 7px;border-radius:4px">${labels[m.status] || "✅ 已完成"}</span>
+        </div>
+        ${m.note ? `<p style="font-size:13px;color:#374151;margin-bottom:5px">${m.note}</p>` : ""}
+        <p style="font-size:11px;color:#9CA3AF">${t}</p>
+        ${canDel ? `<button onclick="window.__mpDel('${m.id}')" style="margin-top:9px;padding:5px 13px;background:#EF4444;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12px;font-weight:600">删除</button>` : ""}
+      </div>`;
+          },
+          backToCampaigns() {
+            this._cleanup();
+            this.view = "campaigns";
+          },
+          _cleanup() {
+            if (this._unsubMarkers) {
+              this._unsubMarkers();
+              this._unsubMarkers = null;
+            }
+            if (this.map) {
+              this.map.remove();
+              this.map = null;
+            }
+            this.lMarkers = {};
+          },
+
+          // ── Sheet ──
+          cancelSheet() {
+            this.showSheet = false;
+            this.pendingLatLng = null;
+          },
+          async confirmMarker() {
+            if (!this.pendingLatLng || !db) return;
+            const { lat, lng } = this.pendingLatLng;
+            const color = getColor(this.nickname);
+            await db
+              .collection("campaigns")
+              .doc(this.currentCampaign.id)
+              .collection("markers")
+              .add({
+                lat,
+                lng,
+                note: this.sheetNote.trim(),
+                status: this.sheetStatus,
+                nickname: this.nickname,
+                color,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            this.showSheet = false;
+            this.pendingLatLng = null;
+          },
+
+          // ── Marker actions ──
+          async deleteMarker(id) {
+            if (!db || !this.currentCampaign) return;
+            if (!confirm("删除这个标记点？")) return;
+            await db
+              .collection("campaigns")
+              .doc(this.currentCampaign.id)
+              .collection("markers")
+              .doc(id)
+              .delete();
+          },
+          flyTo(m) {
+            if (!this.map) return;
+            this.map.flyTo([m.lat, m.lng], 16, { duration: 0.8 });
+            if (this.lMarkers[m.id]) this.lMarkers[m.id].openPopup();
+          },
+
+          // ── Helpers ──
+          getColor,
+          cityName(id) {
+            return CITIES.find((p) => p.id === id)?.name || id;
+          },
+          cityEmoji(id) {
+            return CITIES.find((p) => p.id === id)?.flag || "📍";
+          },
+          sLbl(s) {
+            return (
+              { done: "完成", progress: "进行中", skip: "跳过" }[s] || "完成"
+            );
+          },
+          sCls(s) {
+            return (
+              { done: "s-done", progress: "s-progress", skip: "s-skip" }[s] ||
+              "s-done"
+            );
+          },
+          fmtTime(ts) {
+            if (!ts?.seconds) return "";
+            return new Date(ts.seconds * 1000).toLocaleString("zh-CN", {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          },
+        },
+
+        mounted() {
+          // Popup delete button bridge
+          window.__mpDel = (id) => this.deleteMarker(id);
+          if (this.nickname && db) this.loadCampaigns();
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
